@@ -13,6 +13,8 @@ require 'review/builder'
 require 'review/htmlutils'
 require 'review/htmllayout'
 require 'review/textutils'
+require 'tmpdir'
+require 'base64'
 
 module ReVIEW
 
@@ -871,7 +873,28 @@ QUOTE
     end
 
     def inline_m(str)
-      if ReVIEW.book.param["mathml"]
+      if true
+        dir = Dir.mktmpdir
+        base64data = ""
+        Dir.chdir(dir) do
+          File.open("math.tex", "w") do |f|
+            f.puts <<EOS
+\\documentclass[varwidth]{standalone}
+\\usepackage{standalone}
+\\begin{document}
+$#{str}$
+\\end{document}
+EOS
+          end
+          FileUtils.cp('math.tex', '/tmp/')
+          system("pdflatex math.tex 1> /dev/null 2>/dev/null")
+          FileUtils.cp('math.pdf', '/tmp/')
+          system("convert -density 125 math.pdf math.png 1> /dev/null 2>/dev/null")
+          base64data = Base64.encode64(File.read("math.png")).gsub("\n","").strip
+        end
+        FileUtils.rm_rf(dir)
+        %Q[<span class="equation"><image src="data:image/png;base64,#{base64data}"></span>]
+      elsif ReVIEW.book.param["mathml"]
         p = MathML::LaTeX::Parser.new
         %Q[<span class="equation">#{p.parse(str, nil)}</span>]
       else
